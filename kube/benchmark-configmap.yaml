@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: benchmark-config
+  namespace: vllm-project
+data:
+  VLLM_URL: "http://vllm-service:8000"

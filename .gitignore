@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vs/
+.vscode/
+
+# Secrets
+.env
+.env.*
+kube/secret.yaml
+
+# Model files and caches
+models/
+.cache/
+huggingface/
+*.safetensors
+*.bin
+
+# Temporary files
+*.log
+*.tar
+.DS_Store

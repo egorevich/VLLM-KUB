@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: benchmark-api
+  namespace: vllm-project
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: benchmark-api
+  template:
+    metadata:
+      labels:
+        app: benchmark-api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+
+      containers:
+        - name: benchmark-api
+          image: benchmark-api:0.1.0
+          imagePullPolicy: Never
+
+          ports:
+            - containerPort: 8001
+
+          envFrom:
+            - configMapRef:
+                name: benchmark-config
+
+          env:
+            - name: VLLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vllm-secret
+                  key: VLLM_API_KEY

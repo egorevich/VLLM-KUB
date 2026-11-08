@@ -1,0 +1,51 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    VLLM_TARGET_DEVICE=cpu
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    ca-certificates \
+    build-essential \
+    gcc-12 \
+    g++-12 \
+    cmake \
+    ninja-build \
+    python3.12 \
+    python3.12-dev \
+    python3.12-venv \
+    libnuma-dev \
+    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 10 \
+        --slave /usr/bin/g++ g++ /usr/bin/g++-12 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3.12 -m venv /opt/venv
+
+ENV PATH="/opt/venv/bin:${PATH}"
+ENV MAX_JOBS=4
+
+WORKDIR /opt/vllm
+
+RUN git clone --depth 1 --branch v0.27.0 \
+    https://github.com/vllm-project/vllm.git .
+
+COPY requirements.txt /tmp/requirements.txt
+
+RUN pip install --no-cache-dir \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    -r /tmp/requirements.txt
+
+RUN pip install --no-cache-dir --no-build-isolation --no-deps .
+
+RUN useradd --create-home --uid 10001 app \
+    && mkdir -p /models \
+    && chown -R app:app /opt/venv /opt/vllm /models
+
+COPY --chown=10001:10001 docker/download_model.py /opt/vllm/download_model.py    
+ENV HF_HOME=/models/huggingface
+
+USER app
+
+WORKDIR /app
+
+EXPOSE 8000

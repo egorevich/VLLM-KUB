@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: vllm-project
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+
+      initContainers:
+      - name: model-downloader
+        image: vllm-cpu:0.27.0
+        imagePullPolicy: Never
+        command: ["python", "/opt/vllm/download_model.py"]
+
+        envFrom:
+          - configMapRef:
+              name: vllm-config
+
+        env:
+          - name: MODEL_PATH
+            value: /models/model
+          - name: HF_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: vllm-secret
+                key: HF_TOKEN
+
+        volumeMounts:
+          - name: model-cache
+            mountPath: /models
+      containers:
+        
+        - name: vllm
+          image: vllm-cpu:0.27.0
+          imagePullPolicy: Never
+
+          command: ["vllm"]
+          args:
+            - serve
+            - /models/model
+            - --served-model-name
+            - Qwen/Qwen2.5-0.5B-Instruct
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8000"
+            - --no-enable-log-requests
+            - --max-model-len
+            - "$(MAX_MODEL_LEN)"
+            - --gpu-memory-utilization
+            - "$(GPU_MEMORY_UTILIZATION)"
+
+          ports:
+            - containerPort: 8000
+
+          envFrom:
+            - configMapRef:
+                name: vllm-config
+
+          env:
+            - name: VLLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vllm-secret
+                  key: VLLM_API_KEY
+            - name: HF_HUB_OFFLINE
+              value: '1'
+            - name: TRANSFORMERS_OFFLINE
+              value: '1'
+            - name: VLLM_LOGGING_LEVEL
+              value: INFO
+            - name: VLLM_LOGGING_CONFIG_PATH
+              value: /etc/vllm/logging.json
+
+          volumeMounts:
+            - name: model-cache
+              mountPath: /models
+            - name: shared-memory
+              mountPath: /dev/shm
+            - name: logging-config
+              mountPath: /etc/vllm
+              readOnly: true
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 10
+            failureThreshold: 90
+
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: vllm-model-cache
+        - name: logging-config
+          configMap:
+            name: vllm-logging-config
+
+        - name: shared-memory
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
